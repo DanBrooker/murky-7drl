@@ -136,8 +136,8 @@ function turn()
   foreach(projectiles, function(projectile)
     if projectile.spd == speeds[speed] then
       if not projectile.hit then
-        local x = projectile.x + projectile.dx
-        local y = projectile.y + projectile.dy
+        local x = projectile.x + (projectile.dx * 2)
+        local y = projectile.y + (projectile.dy * 2)
         if walkable(x,y) then
           projectile.x = x
           projectile.y = y
