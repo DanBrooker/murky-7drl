@@ -6,6 +6,7 @@ __lua__
 
 -- global vars
 debug=true
+minimap=false
 screenwidth = 127
 screenheight = 127
 curr_speed = 6
@@ -17,8 +18,6 @@ mapsize_x = 72
 tiles = {}
 dirs = {{0,-1}, {0,1}, {1,0}, {-1,0}}
 turns = 0
-
-u = 0
 
 entity = {}
 entity.__index = entity
@@ -84,14 +83,13 @@ end
 
 function game_init()
   player = entity.create(10,10,1)
+  map_gen()
 
   update=game_update
   draw=game_draw
 end
 
 function game_update()
-  u += 1
-
   if player_control() then
   --   error("player moved")
     -- repeat
@@ -104,15 +102,14 @@ end
 function player_control()
   if (btnp(0)) then
     return move(-1,0)
-  end
-  if (btnp(1)) then
+  elseif (btnp(1)) then
     return move(1,0)
-  end
-  if (btnp(2)) then
+  elseif (btnp(2)) then
     return move(0,-1)
-  end
-  if (btnp(3)) then
+  elseif (btnp(3)) then
     return move(0,1)
+  elseif (btnp(4)) then
+    minimap = not minimap
   end
   return false
 end
@@ -169,14 +166,14 @@ function game_draw()
 
   camera()
 
-  -- if debug then
-  --   minimap_draw()
-  -- end
+  if debug and minimap then
+    minimap_draw()
+  end
 
   -- draw ui
   rectfill(0,screenheight-6,screenwidth, screenheight, 7)
   if debug then
-    print(player.x .. "," .. player.y .. ":" .. u .. " spd: " .. curr_speed .. " tur: " .. turns, 2, screenheight-5, 0)
+    print(player.x .. "," .. player.y .. " spd: " .. curr_speed .. " tur: " .. turns, 2, screenheight-5, 0)
   end
 end
 
@@ -184,14 +181,14 @@ function minimap_draw()
   for x=0, mapsize_x-1 do
     for y=0, mapsize_y-1 do
       if walkable(x,y) then
-        error("walkable " .. x .. "," .. y)
+        -- error("walkable " .. x .. "," .. y)
         -- local n = noise(x,y)
         -- if n > 0.2 then
         --   pset(x, y, 3)
         -- elseif n > 0.1 then
         --   pset(x, y, 11)
         -- else
-          -- pset(x, y, mget(x,y) % 15 + 1)
+          pset(x, y, mget(x,y) % 15 + 1)
         -- end
       else
         -- pset(x, y, 0)
@@ -244,6 +241,29 @@ function move(dx,dy)
     return false
   end
 end
+
+function map_gen()
+  mapseed = rnd(1000)
+  genperms()
+  local x, y
+
+  for x=0, mapsize_x-1 do
+    for y=0, mapsize_y-1 do
+
+      local n = noise(x,y)
+      if n > 0.2 then
+        mset(x, y, 8)
+      elseif n > 0.1 then
+        mset(x, y, 24)
+      elseif n > 0.0 then
+        mset(x, y, 40)
+      else
+        mset(x, y, 0)
+      end
+    end
+  end
+end
+
 
 -- library functions
 --- center align from: pico-8.wikia.com/wiki/centering_text
@@ -363,6 +383,36 @@ end
 
 function fade(t)
 	return t*t*t*(t*(t*6-15)+10)
+end
+
+function shuffle(a)
+	local n = count(a)
+	for i=1,n do
+		local k = -flr(-rnd(n))
+		a[i],a[k] = a[k],a[i]
+	end
+	return a
+end
+
+function push(stack,item)
+	stack[#stack+1]=item
+end
+function pop(stack)
+	local r = stack[#stack]
+	stack[#stack]=nil
+	return r
+end
+function top(stack)
+	return stack[#stack]
+end
+
+function at(array, x, y)
+  local one = array[x]
+  if one then
+    return one[y]
+  else
+    return nil
+  end
 end
 
 -- utils
