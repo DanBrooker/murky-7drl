@@ -215,6 +215,13 @@ function projectile_move(projectile)
     -- TODO elseif entity() -- enemy / player
     --
     else
+      local monster = monster_at(x,y)
+      if monster then
+        projectile.x = x
+        projectile.y = y
+        del(monsters, monster)
+        sfx(3)
+      end
       projectile.hit = true -- stop projectiles when they hit something
     end
   end
@@ -242,20 +249,22 @@ end
 
 function monster_move(monster)
   local dir = dirs[ range(1,4) ]
-  if walkable(dir[1],dir[2]) then
-    monster.x += dir[1]
-    monster.y += dir[2]
+  local x = monster.x + dir[1]
+  local y = monster.y + dir[2]
+  if walkable(x, y) then
+    monster.x = x
+    monster.y = y
   end
 end
 
 function minimap_draw()
   for x=0, mapsize_x-1 do
     for y=0, mapsize_y-1 do
-      if walkable(x,y) then
+      -- if walkable(x,y) then
         pset(x, y, mget(x,y) % 15 + 1)
-      else
-        pset(x, y, 0)
-      end
+      -- else
+      --   pset(x, y, 0)
+      -- end
     end
   end
   -- draw rooms
@@ -292,13 +301,49 @@ function mget(x,y)
 end
 
 function walkable(x,y)
-  return not fget(mget(x,y),0)
+  return not fget(mget(x,y),0) and monster_at(x,y) == nil
+end
+
+function monster_at(x,y)
+  local ent = nil
+  local match = (function(e)
+    if e.x == x and e.y == y then
+      ent = e
+    end
+  end)
+  foreach(monsters, match)
+  -- foreach(projectiles, match)
+  return ent
+end
+
+function projectile_at(x,y)
+  local ent = nil
+  local match = (function(e)
+    if e.x == x and e.y == y then
+      ent = e
+    end
+  end)
+  -- foreach(monsters, match)
+  foreach(projectiles, match)
+  return ent
 end
 
 function move(dx,dy)
   local x = player.x + dx
   local y = player.y + dy
-  if(walkable(x,y) or debug) then
+  local monster = monster_at(x,y)
+  local projectile = projectile_at(x,y)
+  if(monster) then
+    -- push monster
+
+    -- temp remove monster
+    del(monsters, monster)
+    sfx(3)
+  elseif(projectile) then
+    del(projectiles, projectile)
+    sfx(2)
+    arrows += 1
+  elseif(walkable(x,y) or debug) then
     player.x = x
     player.y = y
     return true
@@ -341,7 +386,7 @@ function map_gen()
         mset(x, y, 8)
       elseif n > 0.0 then
 
-        if (range(1,20)) == 1 then
+        if (range(1,50)) == 1 then
           local monster = entity.create(x,y,3)
           add(monsters, monster)
         end
