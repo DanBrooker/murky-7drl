@@ -7,7 +7,7 @@ __lua__
 -- MIT license
 
 -- global vars
-debug=false
+debug=true
 screenwidth = 127
 screenheight = 127
 speed = 6
@@ -20,6 +20,8 @@ tiles = {}
 dirs = {{0,-1}, {0,1}, {1,0}, {-1,0}}
 turns = 0
 shooting = false
+arrows = 5
+freeze = 5
 
 entity = {}
 entity.__index = entity
@@ -93,14 +95,14 @@ end
 
 function game_update()
   if player_control() then
+    turns += 1
     repeat
-      turn()
-      turns += 1
+      tick()
       speed += 1
       if speed > #speeds then
         speed = 1
       end
-    until speeds[speed] == player.spd
+    until should_move(player)
   end
 end
 
@@ -122,43 +124,71 @@ function player_control()
   elseif (btnp(4)) then
     shooting = not shooting
   elseif (btnp(5)) then
-    debug = not debug
+    if player.spd == "normal" then
+      player.spd = "vfast"
+    else
+      player.spd = "normal"
+    end
   end
   return false
 end
 
-function turn()
+function should_move(entity)
+  return entity.spd == speeds[speed]
+end
+
+function tick()
   foreach(monsters, function(monster)
-    if monster.spd == speeds[speed] then
-      monster.x += 1
+    if should_move(monster) then
+      monster_move(monster)
     end
   end)
   foreach(projectiles, function(projectile)
-    if projectile.spd == speeds[speed] then
-      if not projectile.hit then
-        local x = projectile.x + (projectile.dx * 2)
-        local y = projectile.y + (projectile.dy * 2)
-        if walkable(x,y) then
-          projectile.x = x
-          projectile.y = y
-        -- TODO elseif entity() -- enemy / player
-        --
-        else
-          projectile.hit = true -- stop projectiles when they hit something
-        end
-      end
+    if should_move(projectile) then
+      projectile_move(projectile)
     end
   end)
 end
 
 function game_draw()
 	rectfill(0,0,screenwidth, screenheight, 0)
-
   cx = player.x*8-64
   cy = player.y*8-64
-  camera(cx,cy)
+  camera(cx, cy)
 
-  -- draw map
+  map_draw()
+
+  palt(0, false) -- make black opaque
+  foreach(monsters, function(monster)
+    monster:draw()
+  end)
+  foreach(projectiles, function(projectile)
+    projectile_sprite(projectile)
+    projectile:draw()
+  end)
+	player:draw()
+  palt(0, true) -- reset black to transparent
+
+  camera() -- reset camera
+
+  if debug then
+    minimap_draw()
+  end
+
+  -- draw ui
+  rectfill(0,screenheight-6,screenwidth, screenheight, 7)
+  if debug then
+    print(player.x .. "," .. player.y .. " spd: " .. speed .. " tur: " .. turns, 2, screenheight-5, 0)
+  elseif shooting then
+    print("\x8b\x91\x94\x83 to fire", 2, screenheight-5, 0)
+  elseif player.spd != "normal" then
+    print("z to aim, x to cancel", 2, screenheight-5, 0)
+  else
+    print("z to aim, x for elven speed", 2, screenheight-5, 0)
+  end
+end
+
+function map_draw()
   local ox = cx%8
   local oy = cy%8
   for my=cy/8,cy/8+16 do
@@ -173,48 +203,48 @@ function game_draw()
 			end
 		end
 	end
+end
 
-  palt(0, false) -- make black opaque
-  foreach(monsters, function(monster)
-    monster:draw()
-  end)
-  foreach(projectiles, function(projectile)
-    if projectile.hit then
-      projectile.spr = 22
+function projectile_move(projectile)
+  if not projectile.hit then
+    local x = projectile.x + projectile.dx
+    local y = projectile.y + projectile.dy
+    if walkable(x,y) then
+      projectile.x = x
+      projectile.y = y
+    -- TODO elseif entity() -- enemy / player
+    --
     else
-      if projectile.dx == 0 then
-        if projectile.dy < 0 then
-          projectile.spr = 6
-        else
-          projectile.spr = 38
-        end
+      projectile.hit = true -- stop projectiles when they hit something
+    end
+  end
+end
+
+function projectile_sprite(projectile)
+  if projectile.hit then
+    projectile.spr = 22
+  else
+    if projectile.dx == 0 then
+      if projectile.dy < 0 then
+        projectile.spr = 6
       else
-        if projectile.dx > 0 then
-          projectile.spr = 23
-        else
-          projectile.spr = 21
-        end
+        projectile.spr = 38
+      end
+    else
+      if projectile.dx > 0 then
+        projectile.spr = 23
+      else
+        projectile.spr = 21
       end
     end
-    projectile:draw()
-  end)
-	player:draw()
-  palt(0, true) -- reset black to transparent
-
-  camera()
-
-  if debug then
-    minimap_draw()
   end
+end
 
-  -- draw ui
-  rectfill(0,screenheight-6,screenwidth, screenheight, 7)
-  if debug then
-    print(player.x .. "," .. player.y .. " spd: " .. speed .. " tur: " .. turns, 2, screenheight-5, 0)
-  elseif shooting then
-    print("\x8b\x91\x94\x83 to fire", 2, screenheight-5, 0)
-  else
-    print("z to aim", 2, screenheight-5, 0)
+function monster_move(monster)
+  local dir = dirs[ range(1,4) ]
+  if walkable(dir[1],dir[2]) then
+    monster.x += dir[1]
+    monster.y += dir[2]
   end
 end
 
@@ -266,8 +296,8 @@ function walkable(x,y)
 end
 
 function move(dx,dy)
-  x = player.x + dx
-  y = player.y + dy
+  local x = player.x + dx
+  local y = player.y + dy
   if(walkable(x,y) or debug) then
     player.x = x
     player.y = y
@@ -279,11 +309,11 @@ function move(dx,dy)
 end
 
 function shoot(dx, dy)
-  x = player.x + dx
-  y = player.y + dy
+  local x = player.x + dx
+  local y = player.y + dy
   if(walkable(x,y) or debug) then
     local projectile = entity.create(x,y,6)
-    projectile.spd = "fast"
+    projectile.spd = "vfast"
     projectile.dx = dx
     projectile.dy = dy
     projectile.hit = false
@@ -310,6 +340,12 @@ function map_gen()
       elseif n > 0.1 then
         mset(x, y, 8)
       elseif n > 0.0 then
+
+        if (range(1,20)) == 1 then
+          local monster = entity.create(x,y,3)
+          add(monsters, monster)
+        end
+
         mset(x, y, 40)
       else
         mset(x, y, 0)
@@ -317,7 +353,6 @@ function map_gen()
     end
   end
 end
-
 
 -- library functions
 --- center align from: pico-8.wikia.com/wiki/centering_text
@@ -335,23 +370,23 @@ function vcenter(s)
 end
 
 --- collision check
-function iscolliding(obj1, obj2)
-	local x1 = obj1.x
-	local y1 = obj1.y
-	local w1 = obj1.w
-	local h1 = obj1.h
-
-	local x2 = obj2.x
-	local y2 = obj2.y
-	local w2 = obj2.w
-	local h2 = obj2.h
-
-	if(x1 < (x2 + w2)  and (x1 + w1)  > x2 and y1 < (y2 + h2) and (y1 + h1) > y2) then
-		return true
-	else
-		return false
-	end
-end
+-- function iscolliding(obj1, obj2)
+-- 	local x1 = obj1.x
+-- 	local y1 = obj1.y
+-- 	local w1 = obj1.w
+-- 	local h1 = obj1.h
+--
+-- 	local x2 = obj2.x
+-- 	local y2 = obj2.y
+-- 	local w2 = obj2.w
+-- 	local h2 = obj2.h
+--
+-- 	if(x1 < (x2 + w2)  and (x1 + w1)  > x2 and y1 < (y2 + h2) and (y1 + h1) > y2) then
+-- 		return true
+-- 	else
+-- 		return false
+-- 	end
+-- end
 
 function assert(a,text)
 	if not a then
@@ -364,6 +399,33 @@ function error(text)
 	print(text)
 	_update = function() end
 	_draw = function() end
+end
+
+function range(min,max)
+  return flr(rnd(max)) + min
+end
+
+function push(stack,item)
+	stack[#stack+1]=item
+end
+
+function pop(stack)
+	local r = stack[#stack]
+	stack[#stack]=nil
+	return r
+end
+
+function top(stack)
+	return stack[#stack]
+end
+
+function at(array, x, y)
+  local one = array[x]
+  if one then
+    return one[y]
+  else
+    return nil
+  end
 end
 
 -- noise from tempest.p8
@@ -448,29 +510,6 @@ function shuffle(a)
 	return a
 end
 
-function push(stack,item)
-	stack[#stack+1]=item
-end
-function pop(stack)
-	local r = stack[#stack]
-	stack[#stack]=nil
-	return r
-end
-function top(stack)
-	return stack[#stack]
-end
-
-function at(array, x, y)
-  local one = array[x]
-  if one then
-    return one[y]
-  else
-    return nil
-  end
-end
-
--- utils
---------
 function lerp(a,b,t)
 	return (1-t)*a+t*b
 end
