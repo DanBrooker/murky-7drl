@@ -7,7 +7,7 @@ __lua__
 -- MIT license
 
 -- global vars
-debug=true
+debug=false
 screenwidth = 127
 screenheight = 127
 speed = 6
@@ -20,8 +20,9 @@ tiles = {}
 dirs = {{0,-1}, {0,1}, {1,0}, {-1,0}}
 turns = 0
 shooting = false
-arrows = 5
+arrows = 3
 freeze = 5
+health = 2
 
 entity = {}
 entity.__index = entity
@@ -177,6 +178,12 @@ function game_draw()
 
   -- draw ui
   rectfill(0,screenheight-6,screenwidth, screenheight, 7)
+
+  -- health
+  print( health .."\x87", 1, 1, 8)
+  print( arrows .."", 1, 9, 4)
+  spr(22, 4, 8)
+
   if debug then
     print(player.x .. "," .. player.y .. " spd: " .. speed .. " tur: " .. turns, 2, screenheight-5, 0)
   elseif shooting then
@@ -248,12 +255,39 @@ function projectile_sprite(projectile)
 end
 
 function monster_move(monster)
-  local dir = dirs[ range(1,4) ]
-  local x = monster.x + dir[1]
-  local y = monster.y + dir[2]
-  if walkable(x, y) then
-    monster.x = x
-    monster.y = y
+  local distance = ent_distance(monster, player)
+  local dir = nil
+  if distance == 1 then
+    -- TODO: hit player
+  elseif distance < 6 then
+    -- TODO: move toward player
+    local dx = player.x - monster.x
+    local dy = player.y - monster.y
+
+    if dx > dy then
+      if dx > 0 then
+        dir = {1, 0}
+      else
+        dir = {-1, 0}
+      end
+    else
+      if dy > 0 then
+        dir = {0, 1}
+      else
+        dir = {0, -1}
+      end
+    end
+  else
+    dir = dirs[ range(1,4) ]
+  end
+
+  if dir then
+    local x = monster.x + dir[1]
+    local y = monster.y + dir[2]
+    if walkable(x, y) then
+      monster.x = x
+      monster.y = y
+    end
   end
 end
 
@@ -354,6 +388,10 @@ function move(dx,dy)
 end
 
 function shoot(dx, dy)
+  if arrows <= 0 and not debug then
+    shooting = false
+    return
+  end
   local x = player.x + dx
   local y = player.y + dy
   if(walkable(x,y) or debug) then
@@ -364,6 +402,7 @@ function shoot(dx, dy)
     projectile.hit = false
     add(projectiles, projectile)
     shooting = false
+    arrows -= 1
     return true
   else
     sfx(1)
@@ -471,6 +510,14 @@ function at(array, x, y)
   else
     return nil
   end
+end
+
+function ent_distance(a, b)
+  return distance(a.x, a.y, b.x, b.y)
+end
+
+function distance(ax, ay, bx,by)
+  return abs(ax - bx) + abs(ay - by)
 end
 
 -- noise from tempest.p8
