@@ -180,9 +180,9 @@ function game_draw()
   rectfill(0,screenheight-6,screenwidth, screenheight, 7)
 
   -- health
-  print( health .."\x87", 1, 1, 8)
-  print( arrows .."", 1, 9, 4)
-  spr(22, 4, 8)
+  print( health .. "\x87", 1, 1, 8)
+  print( arrows .. "", 1, 9, 4)
+  spr(22, 4, 7)
 
   if debug then
     print(player.x .. "," .. player.y .. " spd: " .. speed .. " tur: " .. turns, 2, screenheight-5, 0)
@@ -219,6 +219,10 @@ function projectile_move(projectile)
     if walkable(x,y) then
       projectile.x = x
       projectile.y = y
+      projectile.range -= 1
+      if projectile.range <= 0 then
+        projectile.hit = true
+      end
     -- TODO elseif entity() -- enemy / player
     --
     else
@@ -400,6 +404,7 @@ function shoot(dx, dy)
     projectile.dx = dx
     projectile.dy = dy
     projectile.hit = false
+    projectile.range = 10
     add(projectiles, projectile)
     shooting = false
     arrows -= 1
