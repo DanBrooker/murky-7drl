@@ -472,6 +472,12 @@ function map_gen()
       end
     end
   end
+
+	local first = monsters[1]
+
+	player.x = first.x
+	player.y = first.y
+	del(monsters, first)
 end
 
 -- library functions
