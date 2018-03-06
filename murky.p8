@@ -7,7 +7,7 @@ __lua__
 -- mit license
 
 -- global vars
-debug=false
+debug=true
 screenwidth = 127
 screenheight = 127
 speeds = { "vfast", "fast", "vfast", "fast", "vfast", "normal" }
@@ -306,7 +306,7 @@ function monster_move(monster)
 
     sfx(1)
     health -= 1
-    if health <= 0 then
+    if health <= 0 and not debug then
 			end_init(monster.name)
     end
   elseif distance < 6 then
@@ -344,7 +344,9 @@ end
 function minimap_draw()
   for x=0, mapsize_x-1 do
     for y=0, mapsize_y-1 do
-      pset(x, y, mget(x,y) % 15 + 1)
+			if mget(x,y) then
+	      pset(x, y, mget(x,y) % 15 + 1)
+			end
     end
   end
 
@@ -450,69 +452,113 @@ function map_gen()
   genperms()
   local x, y
 
-  for x=0, mapsize_x-1 do
-    for y=0, mapsize_y-1 do
+	local third = flr(mapsize_x / 3)
+	local a,b,c = third, third*2, mapsize_y
 
-      local n = noise(x,y)
-      if n > 0.1 then
-        mset(x, y, trees[range(1,#trees)])
-      elseif n > 0.0 then
-
-        if (range(1,50)) == 1 then
-          local monster = entity.create(x,y, 32, "snake")
-          add(monsters, monster)
-        end
-
-        -- mset(x, y, 40)
-        mset(x, y, floor[range(1,#floor)])
-			elseif n < -0.3 then
-				mset(x, y, bog[range(1,#bog)])
-      else
-        mset(x, y, 0)
-      end
-    end
-  end
-
+  for y=0, mapsize_y-1 do
+	  for x=0, a do
+			sector1(x,y)
+		end
+	end
 	local first = monsters[1]
-
 	player.x = first.x
 	player.y = first.y
 	del(monsters, first)
+
+	local sector1_exit = range(5, 20)
+	printh("sector1 " .. a .. "," .. sector1_exit, "debug.txt")
+	local path = astar({player.x, player.y}, {a, sector1_exit}, function(x,y)
+		return x > 0 and x <= sector1_exit
+	end)
+	for point in all(path) do
+		if debug then
+			mset(point[1],point[2], 2)
+		else
+			if not walkable(point[1],point[2]) then
+				mset(point[1],point[2], floor[range(1,#floor)])
+			end
+		end
+	end
+
+	local sector2_exit = range(5, 20)
+	printh("sector2 " .. b+1 .. "," .. sector2_exit, "debug.txt")
+	for y=0, mapsize_y-1 do
+		for x=a, b do
+			-- sector2(x,y)
+			mset(x,y,24)
+		end
+	end
+	path = astar({a, sector1_exit}, {b+1, sector2_exit}, function(x,y)
+		return x > b+1 and x <= sector2_exit
+	end)
+	for point in all(path) do
+		if debug then
+			mset(point[1],point[2], 2)
+		else
+			if not walkable(point[1],point[2]) then
+				mset(point[1],point[2], floor[range(1,#floor)])
+			end
+		end
+	end
+
+	-- local sector3_exit = range(5, 20)
+	-- for y=0, mapsize_y-1 do
+	-- 	for x=b, mapsize_x-2 do
+	-- 		sector1(x,y)
+	-- 	end
+	-- end
+	-- path = astar({b, sector2_exit}, {c, sector3_exit}, function(x,y)
+	-- 	return true
+	-- end)
+	-- for point in all(path) do
+	-- 	if debug then
+	-- 		mset(point[1],point[2], 2)
+	-- 	else
+	-- 		if not walkable(point[1],point[2]) then
+	-- 			mset(point[1],point[2], floor[range(1,#floor)])
+	-- 		end
+	-- 	end
+	-- end
 end
 
--- library functions
---- center align from: pico-8.wikia.com/wiki/centering_text
+function sector1(x,y)
+	local n = noise(x,y)
+	if n > 0.1 then
+		mset(x, y, trees[range(1,#trees)])
+	elseif n > 0.0 then
+
+		if (range(1,60)) == 1 then
+			local monster = entity.create(x,y, 32, "snake")
+			add(monsters, monster)
+		elseif (range(1,40)) == 1 then
+			local monster = entity.create(x,y, 48, "bat")
+			-- monster.spd= "fast"
+			add(monsters, monster)
+		end
+
+		mset(x, y, floor[range(1,#floor)])
+	elseif n < -0.3 then
+		mset(x, y, bog[range(1,#bog)])
+	else
+		mset(x, y, 0)
+	end
+end
+
+function sector2(x,y)
+
+end
+
+function sector3(x,y)
+
+end
+
 function hcenter(s)
-	-- string length time			s the
-	-- pixels in a char's width
-	-- cut in half and rounded down
 	return (screenwidth / 2)-flr((#s*4)/2)
 end
 
 function vcenter(s)
-	-- string char's height
-	-- cut in half and rounded down
 	return (screenheight /2)-flr(5/2)
 end
-
---- collision check
--- function iscolliding(obj1, obj2)
--- 	local x1 = obj1.x
--- 	local y1 = obj1.y
--- 	local w1 = obj1.w
--- 	local h1 = obj1.h
---
--- 	local x2 = obj2.x
--- 	local y2 = obj2.y
--- 	local w2 = obj2.w
--- 	local h2 = obj2.h
---
--- 	if(x1 < (x2 + w2)  and (x1 + w1)  > x2 and y1 < (y2 + h2) and (y1 + h1) > y2) then
--- 		return true
--- 	else
--- 		return false
--- 	end
--- end
 
 function assert(a,text)
 	if not a then
@@ -541,6 +587,24 @@ function pop(stack)
 	return r
 end
 
+function insert(t, val, p)
+	if #t >= 1 then
+		add(t, {})
+		for i=(#t),2,-1 do
+			local next = t[i-1]
+		 	if p < next[2] then
+		  	t[i] = {val, p}
+		  	return
+		 	else
+		  	t[i] = next
+		 	end
+		end
+		t[1] = {val, p}
+	else
+		add(t, {val, p})
+	end
+end
+
 function top(stack)
 	return stack[#stack]
 end
@@ -566,10 +630,6 @@ end
 
 function noise(x,y)
 	return fractal_noise_2d(6,0.65,0.025,x+mapseed,y+mapseed)
-	-- local d = distance(x/2-mapsize_x/4,y-mapsize_y/2)
-	-- if x < 2 or x > mapsize_x - 2 then return 0 end
-	-- if y < 2 or y > mapsize_y - 2 then return 0 end
-	-- return v - d*d*0.00015
 end
 
 function fractal_noise_2d(octaves,persistence,scale,x,y)
@@ -648,14 +708,141 @@ function lerp(a,b,t)
 	return (1-t)*a+t*b
 end
 
+function vec(point)
+	return flr(point[2])*256+flr(point[1])%256
+end
+
+function vec2xy(v)
+	local y = flr(v/256)
+	local x = v-flr(y*256)
+	return {x,y}
+end
+
+function reverse(t)
+	for i=1,(#t/2) do
+		local temp = t[i]
+		local oppindex = #t-(i-1)
+		t[i] = t[oppindex]
+		t[oppindex] = temp
+	end
+end
+
+function inlist(list,x)
+	for v in all(list) do
+		if v == x then return v end
+	end
+	return false
+end
+
+function inmap(tx,ty)
+	return tx > 0 and ty > 0 and tx < mapsize_x and ty < mapsize_y
+end
+
+function adjacent(point)
+	local x, y = point[1], point[2]
+
+	local adj = {}
+	local v = {{x-1,y},{x,y-1},{x+1,y},{x,y+1}}
+	for i in all(v) do
+		if inmap(i[1],i[2]) then
+			add(adj,{i[1],i[2],mget(i[1],i[2])})
+		end
+	end
+	return adj
+end
+
+function astar(start, goal, valid)
+	printh("astar " .. start[1] .. "," .. start[2] .. " -> " .. goal[1] .. "," .. goal[2] ,"debug.txt")
+	local frontier = {}
+	insert(frontier, start, 0)
+	local came_from = {}
+	came_from[vec(start)] = nil
+	local cost_so_far = {}
+	cost_so_far[vec(start)] = 0
+
+	while (#frontier > 0 and #frontier < 1000) do
+		local popped = pop(frontier)
+		local current = popped[1]
+
+	 	if vec(current) == vec(goal) then
+	 		break
+	 	end
+
+	 	local neighbours = adjacent(current)
+	 	for next in all(neighbours) do
+			if valid(current[1], current[2]) then
+		  	local nextindex = vec(next)
+
+			  local new_cost = cost_so_far[vec(current)] + cost(current, next)
+
+			  if (cost_so_far[nextindex] == nil) or (new_cost < cost_so_far[nextindex]) then
+					cost_so_far[nextindex] = new_cost
+					local priority = new_cost + heuristic(goal, next)
+					insert(frontier, next, priority)
+
+					came_from[nextindex] = current
+			  end
+			end
+	  end
+	end
+
+	current = came_from[vec(goal)]
+	path = {}
+	local cindex = vec(current)
+	local sindex = vec(start)
+
+	while cindex != sindex do
+	 add(path, current)
+	 current = came_from[cindex]
+	 cindex = vec(current)
+	end
+	add(path, current)
+	reverse(path)
+
+	return path
+end
+
+function cost(a, b)
+	if not walkable(b[1],b[2]) then
+		return rnd(10)
+	elseif mget(b[1],b[2]) == 0 then
+		return 2
+	end
+	return 1
+end
+
+function heuristic(a, b)
+	return distance(a[1], a[2], b[1], b[2])
+end
+
+function floodfill(x,y,comp,action)
+	local queue = {vec(x,y)}
+	local seen = {}
+	while #queue > 0 do
+		local v = pop(queue)
+		local x,y = vec2xy(v)
+		if not (x <= 0 or x >= mapsize_x or y <= 0 or y >= mapsize_y) then
+			push(seen,v)
+			if action(x,y) == true then break end
+			for adj in all(adjacent(x,y)) do
+				local ax,ay = adj[1],adj[2]
+				local av = vec(ax,ay)
+				if not inlist(seen,av) and comp(ax,ay) then
+					push(queue,av)
+				end
+			end
+		end
+	end
+end
+
 __gfx__
 00000000000000000000000000000000000000000000600000006000000000000033330000033000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000005650000056500000000000333333000333300000040000000000000000000000005600000056000000000
-000000000000000000000000000000000000000000004000000040000000000033333333000330000404000000cccc0000000000000004500000045000000000
-00000000000000000000000000000000000000000000400000004000000000003333333300333300004040400c8cccc000000000000040000000400000000000
-000000000000000000000000000000000000000000004000000040000000000033333b3303333330000404000cccc8c000000000000400000004000000000000
-0000000000000000000000000000000000000000000040000000400000000000033bb33000333b00000440000cccccc000000000074000000740000000000000
-000000000000000000000000000000000000000000074700000747000000000000044000000bb00000044000000cc00000000000007000000070000000000000
+000000000000000000088800000000000000000000004000000040000000000033333333000330000404000000cccc0000000000000004500000045000000000
+00000000000000000080008000000000000000000000400000004000000000003333333300333300004040400c8cccc000000000000040000000400000000000
+000000000000000000800080000000000000000000004000000040000000000033333b3303333330000404000cccc8c000000000000400000004000000000000
+0000000000000000008000800000000000000000000040000000400000000000033bb33000333b00000440000cccccc000000000074000000740000000000000
+000000000000000000088800000000000000000000074700000747000000000000044000000bb00000044000000cc00000000000007000000070000000000000
 0000000000000000000000000000000000000000000707000007070000000000000440000004400000044000000cc00000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000077777777000000000000000000000000000000000000000000000000
 0f0eee00000000000000000000000000000000000000000000000000000000000000000007007777000000000000000000000000000000000000000000000000
@@ -675,14 +862,14 @@ __gfx__
 00000000000000000000000000000000000000000000600000006000000000000000050005500000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000005500000000000000000000000000000000000000000000000000000
 50000050000000000000000000000000000000000000000000000000000000000505000050500500000000000000000000000000000000000000000000000000
-55000550055555550000000000000000000000007700005077000050000000000000050000000000000003000000000000000000000000000000000000000000
-05555500550550050000000000000000000000000444446604444466000000000000000000000000003033000000000000000000000000000000000000000000
-00555000500050050000000000000000000000007700005077000050000000000500005000000050000330000000000000000000000000000000000000000000
-00050000000000000000000000000000000000000000000000000000000000000000000000500550000030000000000000000000000000000000000000000000
+55000550000000000000000000000000000000007700005077000050000000000000050000000000000003000000000000000000000000000000000000000000
+05555500055555000000000000000000000000000444446604444466000000000000000000000000003033000000000000000000000000000000000000000000
+00555000505550500000000000000000000000007700005077000050000000000500005000000050000330000000000000000000000000000000000000000000
+00050000500500500000000000000000000000000000000000000000000000000000000000500550000030000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000500000000550000030000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000500000005000000000000000000000000000000000000000000000000000000
 __gff__
-0000000400020200010101000002020000000404000202020000000000000000040404000002020000000000000000000404040000020200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000400020200010101000002020000000404000202020100000000000000040404000002020000000000000000000404040000020200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
