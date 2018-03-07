@@ -467,8 +467,12 @@ function map_gen()
 
 	local sector1_exit = range(5, 20)
 	printh("sector1 " .. a .. "," .. sector1_exit, "debug.txt")
-	local path = astar({player.x, player.y}, {a, sector1_exit}, function(x,y)
-		return x > 0 and x <= sector1_exit
+	local path = astar({player.x, player.y}, {a, sector1_exit}, function(point, next)
+		local cost = prefer_walkable(point, next)
+		if point[1] > a then
+			cost += 1000
+		end
+		return cost
 	end)
 	for point in all(path) do
 		if debug then
@@ -488,8 +492,12 @@ function map_gen()
 			mset(x,y,24)
 		end
 	end
-	path = astar({a, sector1_exit}, {b+1, sector2_exit}, function(x,y)
-		return x > b+1 and x <= sector2_exit
+	path = astar({a, sector1_exit}, {b, sector2_exit}, function(point, next)
+		local cost = prefer_walkable(point, next)
+		if point[1] > b or point[1] < a then
+			cost += 1000
+		end
+		return cost
 	end)
 	for point in all(path) do
 		if debug then
@@ -507,7 +515,7 @@ function map_gen()
 	-- 		sector1(x,y)
 	-- 	end
 	-- end
-	-- path = astar({b, sector2_exit}, {c, sector3_exit}, function(x,y)
+	-- path = astar({b, sector2_exit}, {c+1, sector3_exit}, function(x,y)
 	-- 	return true
 	-- end)
 	-- for point in all(path) do
@@ -751,7 +759,7 @@ function adjacent(point)
 	return adj
 end
 
-function astar(start, goal, valid)
+function astar(start, goal, cost)
 	printh("astar " .. start[1] .. "," .. start[2] .. " -> " .. goal[1] .. "," .. goal[2] ,"debug.txt")
 	local frontier = {}
 	insert(frontier, start, 0)
@@ -770,19 +778,19 @@ function astar(start, goal, valid)
 
 	 	local neighbours = adjacent(current)
 	 	for next in all(neighbours) do
-			if valid(current[1], current[2]) then
-		  	local nextindex = vec(next)
 
-			  local new_cost = cost_so_far[vec(current)] + cost(current, next)
+	  	local nextindex = vec(next)
 
-			  if (cost_so_far[nextindex] == nil) or (new_cost < cost_so_far[nextindex]) then
-					cost_so_far[nextindex] = new_cost
-					local priority = new_cost + heuristic(goal, next)
-					insert(frontier, next, priority)
+		  local new_cost = cost_so_far[vec(current)] + cost(current, next)
 
-					came_from[nextindex] = current
-			  end
-			end
+		  if (cost_so_far[nextindex] == nil) or (new_cost < cost_so_far[nextindex]) then
+				cost_so_far[nextindex] = new_cost
+				local priority = new_cost + heuristic(goal, next)
+				insert(frontier, next, priority)
+
+				came_from[nextindex] = current
+		  end
+
 	  end
 	end
 
@@ -791,18 +799,20 @@ function astar(start, goal, valid)
 	local cindex = vec(current)
 	local sindex = vec(start)
 
+	add(path, goal)
+
 	while cindex != sindex do
 	 add(path, current)
 	 current = came_from[cindex]
 	 cindex = vec(current)
 	end
-	add(path, current)
+	add(path, start)
 	reverse(path)
 
 	return path
 end
 
-function cost(a, b)
+function prefer_walkable(a, b)
 	if not walkable(b[1],b[2]) then
 		return rnd(10)
 	elseif mget(b[1],b[2]) == 0 then
