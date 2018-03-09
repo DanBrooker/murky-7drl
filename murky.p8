@@ -7,7 +7,7 @@ __lua__
 -- mit license
 
 -- global vars
-debug=false
+debug=true
 screenwidth = 127
 screenheight = 127
 speeds = { "vfast", "fast", "vfast", "fast", "vfast", "normal" }
@@ -39,8 +39,10 @@ function entity.create(x,y,spr,name)
   new_entity.spr = spr
   new_entity.spd = "normal"
 	new_entity.hp = 1
+	new_entity.range = 6
 	new_entity.dead = false
 	new_entity.animate = true
+	new_entity.flash = false
 
 	return new_entity
 end
@@ -50,11 +52,17 @@ function entity:draw()
 	if time > 10 and self.animate then
 		s += 1
 	end
+	if self.flash then
+		pal(0, 8)
+		self.flash = false
+	end
   spr(s, self.x * 8, self.y * 8)
+	pal(0, 0)
 end
 
 function entity:dmg(hp, damager)
 	self.hp -= hp
+	self.flash = true
 	if self.hp <= 0 then
 		self.dead = true
 		reason = damager
@@ -64,8 +72,8 @@ function entity:dmg(hp, damager)
     if self.dead and not debug then
 			end_init()
     end
-	else
-		del(monsters,entity)
+	elseif self.dead then
+		del(monsters,self)
 	end
 end
 
@@ -246,12 +254,12 @@ function game_draw()
 	foreach(objects, function(object)
 		object:draw(false)
 	end)
+	foreach(projectiles, function(projectile)
+		projectile_sprite(projectile)
+		projectile:draw()
+	end)
   foreach(monsters, function(monster)
     monster:draw()
-  end)
-  foreach(projectiles, function(projectile)
-    projectile_sprite(projectile)
-    projectile:draw()
   end)
 	player:draw()
   palt(0, true) -- reset black to transparent
@@ -331,7 +339,8 @@ function projectile_move(projectile)
       if monster then
         projectile.x = x
         projectile.y = y
-        del(monsters, monster)
+				monster:dmg(1, "arrow")
+        -- del(monsters, monster)
         sfx(3)
       end
       projectile.hit = true -- stop projectiles when they hit something
@@ -364,7 +373,7 @@ function monster_move(monster)
   local dir = nil
   if distance == 1 then
 		player:dmg(1, monster.name)
-  elseif distance < 6 then
+  elseif distance < monster.range then
     -- todo: move toward player
     local dx = player.x - monster.x
     local dy = player.y - monster.y
@@ -392,8 +401,10 @@ function monster_move(monster)
     if walkable(x, y) then
       monster.x = x
       monster.y = y
-			if projectile_at(x,y) then
-				del(monsters, monster)
+			local proj = projectile_at(x,y)
+			if proj then
+				proj.hit = true
+				monster:dmg(1, "arrow")
 				sfx(3)
 			end
     end
@@ -570,9 +581,11 @@ function map_gen()
 
 			if range(1,2) == 1 then
 				local monster = entity.create(x,y, 48, "bat")
+				monster.range = 10
 				add(monsters, monster)
 			else
 				local monster = entity.create(x,y, 50, "rat")
+				monster.range = 1
 				add(monsters, monster)
 			end
 
