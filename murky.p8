@@ -196,7 +196,6 @@ function end_draw()
 	if generating then
 		starttxt = "generating..."
 	end
-	tip = "tip: " .. tip
 	rectfill(0,0,screenwidth, screenheight, 1)
 	print(titletxt, hcenter(titletxt), screenheight/4, 10)
 	print(reason, hcenter(reason), screenheight/4 + 8, 10)
