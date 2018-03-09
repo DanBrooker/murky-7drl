@@ -7,9 +7,6 @@ __lua__
 -- mit license
 
 -- todo: arrow trap
--- todo: heart drops
--- todo: messages
--- todo: sound effects
 -- todo: boss fight
 -- todo: end scene
 -- todo: pit hole
@@ -32,10 +29,14 @@ trees = {8,9,10}
 deadtrees = {10, 12}
 floor = {40,41,42,43,56,57,58,59}
 wall = {90, 73, 73, 73, 73, 89, 89}
-caves = {124, 123, 109, 122, 107, 94, 108, 125, 78, 77, 93, 75, 91, 76, 92, 1}
+caves = {124, 123, 109, 122, 107, 94, 108, 125, 78, 77, 93, 75, 91, 76, 92}
 --   1
 -- 2   4
 --   8
+hit=0
+pick=1
+nope=2
+ouch=3
 
 names = { [26]="bog", [27]="bog", [11]="poisonous mushroom", [122]="pits" }
 tips = { "try kicking enemies", "mushrooms don't taste good", "watch out for shadows" }
@@ -56,8 +57,10 @@ function entity.create(x,y,spr,name)
 	new_entity.range = 6
 	new_entity.dead = false
 	new_entity.animate = true
-	new_entity.flash = false
+	new_entity.flash = 0
 	new_entity.ranged = false
+	new_entity.smart = false
+	new_entity.atk = 1
 
 	return new_entity
 end
@@ -68,8 +71,8 @@ function entity:draw()
 		s += 1
 	end
 	if self.flash then
-		pal(0, 8)
-		self.flash = false
+		pal(0, self.flash)
+		self.flash = 0
 	end
 	if fget(s, 2) then
 		palt(0, true)
@@ -83,17 +86,29 @@ end
 
 function entity:dmg(hp, damager)
 	self.hp -= hp
-	self.flash = true
+	if hp < 0 then
+		hearts += 1
+		self.flash = 11
+	else
+		self.flash = 8
+	end
 	if self.hp <= 0 then
 		self.dead = true
 		reason = damager
 	end
 	if self.name == "player" then
-		sfx(1)
+		if hp < 0 then
+			sfx(pick)
+		else
+			sfx(hit)
+		end
     if self.dead and not debug then
 			end_init()
     end
+	elseif self == boss and self.dead then
+		win_init()
 	elseif self.dead then
+		kills += 1
 		del(monsters,self)
 	end
 end
@@ -101,8 +116,10 @@ end
 -- game loop
 
 function _init()
+	cartdata(1)
   -- title_init()
   game_init()
+	win_init()
 end
 
 function _update()
@@ -137,6 +154,7 @@ end
 -- end scene
 
 function end_init()
+	dset(1, deaths+1)
 	tip = tips[range(1,#tips)]
   update=end_update
   draw=end_draw
@@ -158,10 +176,51 @@ function end_draw()
 	print(starttxt, hcenter(starttxt), (screenheight/4)+(screenheight/2),7)
 end
 
+-- win scene
+
+function win_init()
+	dset(2, wins+1)
+  update=win_update
+  draw=win_draw
+end
+
+function win_update()
+	if btnp(4) then
+		game_init()
+	end
+end
+
+function win_draw()
+	local titletxt = "victory"
+	local starttxt = "press z to restart"
+	rectfill(0,0,screenwidth, screenheight, 0)
+	print(titletxt, hcenter(titletxt), 2, 10)
+	print("victory")
+	print(" ")
+	print("deaths " .. deaths)
+	print("wins " .. wins)
+	print(" ")
+	print("kills " .. kills)
+	print("steps " .. steps)
+	print("hearts " .. hearts)
+	print("shot " .. shot)
+	print("missed " .. missed)
+	print("speed " .. spd_usage)
+	print(" ")
+	local score = kills + hearts + shot - missed
+	print("score " .. score)
+
+	print(starttxt, hcenter(starttxt), (screenheight/4)+(screenheight/2),7)
+end
+
 -- game scene
 
 function game_init()
-  player = entity.create(10,10,16, "player")
+	if debug then
+		player = entity.create(36,0,16, "player")
+	else
+	  player = entity.create(10,10,16, "player")
+	end
   turns = 0
   shooting = false
   arrows = 3
@@ -173,13 +232,25 @@ function game_init()
   projectiles = {}
 	objects = {}
 	time = 0
+	kills=0
+	steps=0
+	hearts=0
+	shot=0
+	missed=0
+	spd_usage=0
+	maxx = 10
+	deaths = dget(1)
+	wins = dget(2)
+
 	reason = ""
-	message = { text="part i - the forest", fg=7, bg=1 }
+	message = { ["text"]="",["ticks"]=0 }
 
   map_gen()
 
   update=game_update
   draw=game_draw
+
+	banner("part i - the forest")
 end
 
 function game_update()
@@ -228,6 +299,7 @@ function player_control()
   elseif (btnp(5)) then
     if player.spd == "normal" then
 			if ability > 0 then
+				spd_usage += 1
 				ability -= 1
 				spd_left = 3
 	      player.spd = "vfast"
@@ -256,10 +328,20 @@ function tick()
   end)
 end
 
+function banner(text)
+	message = { ["text"]=text, ["ticks"]=30 }
+end
+
 function game_draw()
 	rectfill(0,0,screenwidth, screenheight, 0)
   cx = player.x*8-64
   cy = player.y*8-64
+
+	if player.flash == 8 then
+		cx += rnd(4) - 2
+		cy += rnd(4) - 2
+	end
+
   camera(cx, cy)
 
 	if player.spd != "normal" then
@@ -304,12 +386,21 @@ function game_draw()
 	print( ability .. "", 1, 17, 12)
 	spr(29, 4, 15)
 
+	if message["ticks"] > 0 then
+		local text = message["text"]
+	  rectfill(0,vcenter(text)-7,screenwidth, vcenter(text)-1, 7)
+		print(text, hcenter(text), vcenter(text)-6, 0)
+		message["ticks"] -= 1
+	end
+
+	-- print(text, hcenter(text)+1, 3, 7)
+	-- print(text, hcenter(text), 4, 12)
+
   if debug then
-    print(player.x .. "," .. player.y .. " spd: " .. speed .. " tur: " .. turns, 2, screenheight-5, 0)
+    print(player.x .. "," .. player.y, 2, screenheight-5, 0)
   elseif shooting then
     print("\x8b\x91\x94\x83 to fire", 2, screenheight-5, 0)
   elseif player.spd != "normal" then
-
     print("z to aim, " .. spd_left .. " actions left", 2, screenheight-5, 0)
   else
 		if ability > 0 then
@@ -353,6 +444,7 @@ function projectile_move(projectile)
       projectile.range -= 1
       if projectile.range <= 0 then
         projectile.hit = true
+				missed += 1
       end
     -- todo elseif entity() -- enemy / player
     --
@@ -363,7 +455,9 @@ function projectile_move(projectile)
         projectile.y = y
 				monster:dmg(1, "arrow")
         -- del(monsters, monster)
-        sfx(3)
+        sfx(ouch)
+			else
+				missed += 1
       end
       projectile.hit = true -- stop projectiles when they hit something
     end
@@ -394,7 +488,18 @@ function monster_move(monster)
   local distance = ent_distance(monster, player)
   local dir = nil
   if distance == 1 then
-		player:dmg(1, monster.name)
+		if monster.atk == 0 then
+			local dx = monster.x - player.x
+	    local dy = monster.y - player.y
+			local mx = player.x + dx
+			local my = player.y + dy
+			if walkable(mx,my) then
+				set_entity_pos(player, mx, my)
+			end
+			sfx(ouch)
+		else
+			player:dmg(monster.atk, monster.name)
+		end
   elseif distance < monster.range then
     -- todo: move toward player
     local dx = player.x - monster.x
@@ -427,7 +532,7 @@ function monster_move(monster)
 			if proj and not proj.hit then
 				proj.hit = true
 				monster:dmg(1, "arrow")
-				sfx(3)
+				sfx(ouch)
 			end
     end
   end
@@ -500,6 +605,16 @@ function set_entity_pos(entity, x, y)
 		entity:dmg(-1, nget(x,y))
 		mset(x,y, 59)
 	end
+	if entity == player then
+		local p2 = flr(mapsize_x / 3)
+		local p3 = flr(mapsize_x / 3 * 2)
+		if player.x == p2 and maxx < p2 then
+			banner("part ii - the cavern")
+		elseif player.x == p3 and maxx < p3 then
+			banner("part iii - the lair")
+		end
+		maxx = max(player.x, maxx)
+	end
 end
 
 function move(dx,dy)
@@ -518,18 +633,19 @@ function move(dx,dy)
 		elseif walkable(x + dx, y + dy) then
 			set_entity_pos(monster, x + dx, y + dy)
     end
-    sfx(3)
+    sfx(ouch)
     return true
   elseif(projectile) then
     del(projectiles, projectile)
-    sfx(1)
+    sfx(pick)
     arrows += 1
     return true
   elseif(walkable(x,y) or debug) then
+		steps += 1
 		set_entity_pos(player, x, y)
     return true
   else
-    sfx(2)
+    sfx(nope)
     return false
   end
 end
@@ -542,6 +658,7 @@ function shoot(dx, dy)
   local x = player.x + dx
   local y = player.y + dy
   if(walkable(x,y) or debug) then
+		shot += 1
     local projectile = entity.create(x,y,6, "arrow")
     projectile.spd = "vfast"
     projectile.dx = dx
@@ -553,7 +670,7 @@ function shoot(dx, dy)
     arrows -= 1
     return true
   else
-    sfx(1)
+    sfx(nope)
     return false
   end
 end
@@ -619,7 +736,7 @@ function map_gen()
 				if not walkable(x,y) then
 					local n = 0
 					foreach(adjacent({x,y}), function(point)
-						if walkable(point[1], point[2]) then
+						if not fget(mget(point[1], point[2]),0) then
 							n += 1
 						end
 					end)
@@ -633,10 +750,10 @@ function map_gen()
 		end
 	-- end
 	-- tile edges
-	for y=1, mapsize_y-2 do
-		for x=a+1, b-1 do
+	for y=0, mapsize_y do
+		for x=a-1, b+1 do
 
-			if walkable(x,y) then
+			if mget(x, y) == 90 then
 				local number = 0
 				--   1
 				-- 2   4
@@ -657,7 +774,7 @@ function map_gen()
 				if number > 0 then
 					mset(x,y,caves[number])
 				-- else
-				-- 	mset(x,y,1)
+					-- mset(x,y,1)
 				end
 			end
 			-- mset() lookup tile based on number
@@ -699,10 +816,10 @@ function map_gen()
 		end
 	end
 
-	local monster = entity.create(mapsize_x-10, sector3_exit, 2, "spider queen")
-	monster.range = 10
-	monster.hp = 5
-	add(monsters, monster)
+	boss = entity.create(mapsize_x-10, sector3_exit, 2, "spider queen")
+	boss.range = 10
+	boss.hp = 5
+	add(monsters, boss)
 end
 
 function sector1(x,y)
@@ -1134,11 +1251,11 @@ __map__
 0000000800000828080808080028280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000808080000000028000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
-000100001a05026750257502375022750087502175008750207501f7501f7501f7501e7501e7501d7501d7501d7501d7501e7501f750207502175022750237500675022750017502675015650166501865018650
+0001000019550195501955019550175501655015550145501455013550135501355013550125501255011550105500f5500f5500f5500e550125500e5500e550125500e5500e5500f5500f5500f5500f5500f550
 000100000c5530e5511055112541145401654016530175301752017520185301855018560195701a5701b5701e570115702357025570295602b5502d54030530315203552036511375513b5513c5523f5523f553
 0001000023150211501f150236501c1501b1501915019150191501f7501915019150191501915018150181501715017150161501c750141501b7501315012150101500f1500d1500d1500c1500b1500b1500a150
-00010000067500675005750057500575004750216500475004750047500575005750057500675007750087500c7500f7501175014750187501b7501e75020750227502475027750287502c7502e7503175032750
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0001000026450244502345021450204401d4301a4501843016430144200f4200c420084200541003410014100e400194000a400074000640005400154000d500124000f4000d4000d5000940007400074000e500
+00080000035000350004500055000550006500065000850009500095000a5000c5000d5000e5001050011500135001450017500195001a5001c5001e5001f500215002350025500265002a5002d5002f50033500
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
