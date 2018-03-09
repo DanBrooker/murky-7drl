@@ -206,7 +206,8 @@ end
 -- win scene
 
 function win_init()
-	dset(2, wins+1)
+	wins += 1
+	dset(2, wins)
   update=win_update
   draw=win_draw
 end
@@ -818,7 +819,7 @@ function map_gen()
 	end
 
 	local spawn = (function(x,y)
-		if range(1, 20) == 1 then
+		if range(1, 25) == 1 then
 
 			if range(1,2) == 1 then
 				local monster = entity.create(x,y, 48, "bat")
@@ -860,6 +861,20 @@ function map_gen()
 			end
 		end
 	-- end
+
+	path = astar({a, sector1_exit}, {b, sector2_exit}, function(point, next)
+		local cost = prefer_walkable(point, next)
+		if point[1] >= b or point[1] < a then
+			cost += 1000
+		end
+		return cost
+	end)
+	for point in all(path) do
+		if not walkable(point[1],point[2]) then
+			mset(point[1],point[2], 90)
+		end
+	end
+
 	-- tile edges
 	for y=0, mapsize_y do
 		for x=a-1, b+1 do
@@ -889,19 +904,6 @@ function map_gen()
 				end
 			end
 			-- mset() lookup tile based on number
-		end
-	end
-
-	path = astar({a, sector1_exit}, {b, sector2_exit}, function(point, next)
-		local cost = prefer_walkable(point, next)
-		if point[1] >= b or point[1] < a then
-			cost += 1000
-		end
-		return cost
-	end)
-	for point in all(path) do
-		if not walkable(point[1],point[2]) then
-			mset(point[1],point[2], 90)
 		end
 	end
 
