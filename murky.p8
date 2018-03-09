@@ -6,9 +6,8 @@ __lua__
 
 -- mit license
 
+-- todo: boss fight - make it hard
 -- todo: arrow trap
--- todo: boss fight
--- todo: end scene
 -- todo: pit hole
 -- todo: sticky webs
 -- todo: enemy archer
@@ -106,6 +105,7 @@ function entity:dmg(hp, damager)
 			end_init()
     end
 	elseif self == boss and self.dead then
+		kills += 1
 		win_init()
 	elseif self.dead then
 		kills += 1
@@ -119,7 +119,7 @@ function _init()
 	cartdata(1)
   -- title_init()
   game_init()
-	win_init()
+	-- win_init()
 end
 
 function _update()
@@ -316,6 +316,10 @@ function should_move(entity)
 end
 
 function tick()
+	if should_move(boss) then
+		boss_move()
+	end
+
   foreach(monsters, function(monster)
     if should_move(monster) then
       monster_move(monster)
@@ -366,6 +370,7 @@ function game_draw()
   foreach(monsters, function(monster)
     monster:draw()
   end)
+	boss:draw()
 	player:draw()
   palt(0, true) -- reset black to transparent
 
@@ -484,6 +489,70 @@ function projectile_sprite(projectile)
   end
 end
 
+function boss_move()
+	local monster = boss
+	local distance = ent_distance(monster, player)
+  local dir = nil
+  if distance <= 2 then
+		-- if monster.atk == 0 then
+		local dx = clamp(player.x - monster.x, -1, 1)
+		local dy = clamp(player.y - monster.y, -1, 1)
+		local mx = player.x + dx
+		local my = player.y + dy
+		if walkable(mx,my) then
+			set_entity_pos(player, mx, my)
+		end
+		sfx(ouch)
+		-- else
+		player:dmg(monster.atk, monster.name)
+		-- end
+  elseif distance < monster.range then
+		local path = astar({boss.x,boss.y}, {player.x, player.y}, function(point)
+			if walkable(point[1], point[2]) then
+				if player.x == point[1] or player == point[2] then
+					return 5
+				else
+					return 1
+				end
+			else
+				return 10
+			end
+		end)
+		local next = path[2]
+		printh("boss path")
+		foreach(path, function(pp)
+			printh("n " .. pp[1] .. ", " .. pp[2], 'debug.txt')
+		end)
+		if next then
+			printh("monster " .. boss.x .. ", " .. boss.y .. " -> " .. next[1] .. ", " .. next[2], 'debug.txt')
+			monster_move_pos(monster, next[1], next[2])
+		else
+			error("no next in path")
+		end
+  else
+    dir = dirs[ range(1,4) ]
+		local mmx = monster.x + dir[1]
+		local mmy = monster.y + dir[2]
+		monster_move_pos(monster, mmx, mmy)
+  end
+end
+
+function monster_move_pos(monster, x, y)
+	if not inmap(x,y) then
+		return
+	end
+	if walkable(x, y) then
+		monster.x = x
+		monster.y = y
+		local proj = projectile_at(x,y)
+		if proj and not proj.hit then
+			proj.hit = true
+			monster:dmg(1, "arrow")
+			sfx(ouch)
+		end
+	end
+end
+
 function monster_move(monster)
   local distance = ent_distance(monster, player)
   local dir = nil
@@ -501,7 +570,7 @@ function monster_move(monster)
 			player:dmg(monster.atk, monster.name)
 		end
   elseif distance < monster.range then
-    -- todo: move toward player
+
     local dx = player.x - monster.x
     local dy = player.y - monster.y
 
@@ -523,18 +592,9 @@ function monster_move(monster)
   end
 
   if dir then
-    local x = monster.x + dir[1]
-    local y = monster.y + dir[2]
-    if walkable(x, y) then
-      monster.x = x
-      monster.y = y
-			local proj = projectile_at(x,y)
-			if proj and not proj.hit then
-				proj.hit = true
-				monster:dmg(1, "arrow")
-				sfx(ouch)
-			end
-    end
+		local mmx = monster.x + dir[1]
+		local mmy = monster.y + dir[2]
+	  monster_move_pos(monster, mmx, mmy)
   end
 end
 
@@ -550,6 +610,7 @@ function minimap_draw()
 	foreach(monsters, function(monster)
 		pset(monster.x,monster.y,8)
 	end)
+	pset(boss.x,boss.y,7)
 
   pset(player.x,player.y,8)
 end
@@ -574,6 +635,9 @@ function monster_at(x,y)
     end
   end)
   foreach(monsters, match)
+	if boss then
+		match(boss)
+	end
   -- foreach(projectiles, match)
   return ent
 end
@@ -819,7 +883,7 @@ function map_gen()
 	boss = entity.create(mapsize_x-10, sector3_exit, 2, "spider queen")
 	boss.range = 10
 	boss.hp = 5
-	add(monsters, boss)
+	-- add(monsters, boss)
 end
 
 function sector1(x,y)
@@ -1041,6 +1105,10 @@ end
 
 function lerp(a,b,t)
 	return (1-t)*a+t*b
+end
+
+function clamp(input,minval,maxval)
+	return min(max(input,minval),maxval)
 end
 
 function vec(point)
