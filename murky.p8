@@ -6,6 +6,16 @@ __lua__
 
 -- mit license
 
+-- todo: arrow trap
+-- todo: heart drops
+-- todo: messages
+-- todo: sound effects
+-- todo: boss fight
+-- todo: end scene
+-- todo: pit hole
+-- todo: sticky webs
+-- todo: enemy archer
+
 -- global vars
 debug=true
 screenwidth = 127
@@ -22,6 +32,10 @@ trees = {8,9,10}
 deadtrees = {10, 12}
 floor = {40,41,42,43,56,57,58,59}
 wall = {90, 73, 73, 73, 73, 89, 89}
+caves = {124, 123, 109, 122, 107, 94, 108, 125, 78, 77, 93, 75, 91, 76, 92, 1}
+--   1
+-- 2   4
+--   8
 
 names = { [26]="bog", [27]="bog", [11]="poisonous mushroom", [122]="pits" }
 tips = { "try kicking enemies", "mushrooms don't taste good", "watch out for shadows" }
@@ -43,6 +57,7 @@ function entity.create(x,y,spr,name)
 	new_entity.dead = false
 	new_entity.animate = true
 	new_entity.flash = false
+	new_entity.ranged = false
 
 	return new_entity
 end
@@ -289,7 +304,6 @@ function game_draw()
 	print( ability .. "", 1, 17, 12)
 	spr(29, 4, 15)
 
-
   if debug then
     print(player.x .. "," .. player.y .. " spd: " .. speed .. " tur: " .. turns, 2, screenheight-5, 0)
   elseif shooting then
@@ -410,7 +424,7 @@ function monster_move(monster)
       monster.x = x
       monster.y = y
 			local proj = projectile_at(x,y)
-			if proj then
+			if proj and not proj.hit then
 				proj.hit = true
 				monster:dmg(1, "arrow")
 				sfx(3)
@@ -482,6 +496,9 @@ function set_entity_pos(entity, x, y)
 	local tile = mget(x,y)
 	if fget(mget(x,y),7) then
 		entity:dmg(1, nget(x,y))
+	elseif fget(mget(x,y),3) then
+		entity:dmg(-1, nget(x,y))
+		mset(x,y, 59)
 	end
 end
 
@@ -498,6 +515,8 @@ function move(dx,dy)
     local my = y + dy + dy
     if walkable(mx,my) then
 			set_entity_pos(monster, mx, my)
+		elseif walkable(x + dx, y + dy) then
+			set_entity_pos(monster, x + dx, y + dy)
     end
     sfx(3)
     return true
@@ -505,7 +524,6 @@ function move(dx,dy)
     del(projectiles, projectile)
     sfx(1)
     arrows += 1
-
     return true
   elseif(walkable(x,y) or debug) then
 		set_entity_pos(player, x, y)
@@ -555,7 +573,6 @@ function map_gen()
 	end
 
 	local sector1_exit = range(5, 20)
-	-- printh("sector1 " .. a .. "," .. sector1_exit, "debug.txt")
 	local path = astar({player.x, player.y}, {a, sector1_exit}, function(point, next)
 		local cost = prefer_walkable(point, next)
 		if point[1] >= a then
@@ -564,21 +581,15 @@ function map_gen()
 		return cost
 	end)
 	for point in all(path) do
-		if debug then
-			mset(point[1],point[2], 1)
-		else
-			if not walkable(point[1],point[2]) then
-				mset(point[1],point[2], floor[range(1,#floor)])
-			end
+		if not walkable(point[1],point[2]) then
+			mset(point[1],point[2], floor[range(1,#floor)])
 		end
 	end
 
 	local sector2_exit = range(5, 20)
-	-- printh("sector2 " .. b+1 .. "," .. sector2_exit, "debug.txt")
 	for y=0, mapsize_y-1 do
 		for x=a+1, b-1 do
 			sector2(x,y)
-			-- mset(x,y,24)
 		end
 		mset(a,y,73)
 		mset(b,y,73)
@@ -593,7 +604,6 @@ function map_gen()
 				add(monsters, monster)
 			else
 				local monster = entity.create(x,y, 18, "shadow")
-				-- local monster = entity.create(x,y, 50, "rat")
 				monster.range = 1
 				add(monsters, monster)
 			end
@@ -601,7 +611,8 @@ function map_gen()
 		end
 	end)
 
-	for i = 1, 1 do
+	-- cellular automata
+	-- for i = 1, 1 do
 		for y=1, mapsize_y-2 do
 			for x=a+1, b-1 do
 
@@ -620,6 +631,37 @@ function map_gen()
 
 			end
 		end
+	-- end
+	-- tile edges
+	for y=1, mapsize_y-2 do
+		for x=a+1, b-1 do
+
+			if walkable(x,y) then
+				local number = 0
+				--   1
+				-- 2   4
+				--   8
+				if not fget(mget(x-1, y),0) then
+					number += 2
+				end
+				if not fget(mget(x+1, y),0) then
+					number += 4
+				end
+				if not fget(mget(x, y-1),0) then
+					number += 1
+				end
+				if not fget(mget(x, y+1),0) then
+					number += 8
+				end
+
+				if number > 0 then
+					mset(x,y,caves[number])
+				-- else
+				-- 	mset(x,y,1)
+				end
+			end
+			-- mset() lookup tile based on number
+		end
 	end
 
 	path = astar({a, sector1_exit}, {b, sector2_exit}, function(point, next)
@@ -630,15 +672,9 @@ function map_gen()
 		return cost
 	end)
 	for point in all(path) do
-		-- if debug then
-		-- 	mset(point[1],point[2], 2)
-		-- else
-			if walkable(point[1],point[2]) then
-				-- spawn(point[1],point[2])
-			else
-				mset(point[1],point[2], 90)
-			end
-		-- end
+		if not walkable(point[1],point[2]) then
+			mset(point[1],point[2], 90)
+		end
 	end
 
 	local sector3_exit = range(5, 20)
@@ -658,14 +694,8 @@ function map_gen()
 		return cost
 	end)
 	for point in all(path) do
-		if debug then
-			mset(point[1],point[2], 1)
-		else
-			if walkable(point[1],point[2]) then
-				-- spawn(point[1],point[2])
-			else
-				mset(point[1],point[2], floor[range(1,#floor)])
-			end
+		if not walkable(point[1],point[2]) then
+			mset(point[1],point[2], floor[range(1,#floor)])
 		end
 	end
 
@@ -685,11 +715,14 @@ function sector1(x,y)
 			local monster = entity.create(x,y, 32, "snake")
 			add(monsters, monster)
 		elseif (range(1,80)) == 1 then
-			-- local monster = entity.create(x,y, 50, "rat")
-			-- monster.spd= "fast"
-			-- add(monsters, monster)
+			local monster = entity.create(x,y, 50, "rat")
+			monster.range = 1
+			add(monsters, monster)
 		elseif (range(1,40)) == 1 then
-			mset(x,y,11)
+			mset(x,y,11) -- mushroom
+			return
+		elseif (range(1,80)) == 1 then
+			mset(x,y,45) -- mushroom
 			return
 		end
 
@@ -1033,8 +1066,8 @@ __gfx__
 0000000000000000000000000000000000000000000707000007070000000000000440000004400000044000000cc00000044000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000077777777000000000000000000000000000000000000000000000000
 0f0eee00000000000900900009009000000000000000000000000000000000000000000007007777000000000000000000000000000000000000000000000000
-00f9faa00f0eee00099990000999900000000000050000770500007700000000000000000777707700000505000000000000000000cccc000000000000000000
-008fff4000f9faa0009099000090990000000000664444406644444000000000000650007770077700000050050005000000000000c70c000000000000000000
+00fafaa00f0eee00099990000999900000000000050000770500007700000000000000000777707700000505000000000000000000cccc000000000000000000
+008fff4000fafaa0009099000090990000000000664444406644444000000000000650007770077700000050050005000000000000c70c000000000000000000
 000fff04008fff440909999009099990000000000500007705000077000000000065550070770707000000000055500000000000000cc0000000000000000000
 00f3bbf4000fff04000099990000999900000000000000000000000000000000005555000007770750000500000000000000000000c70c000000000000000000
 00f3bbf400f3bbf4000099990000999900000000000000000000000000000000000000000007777705555000000000000000000000cccc000000000000000000
@@ -1088,7 +1121,7 @@ __gfx__
 000000000000000000000000000000000000000000000000000000000000000000000000000000005dddddddddddddd55ddddd555dddddd50000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000555555555555555555555555ddddddd50000000000000000
 __gff__
-0000000004020200010101800102020000000404000202020120808000000000000000000002020000000000000000000000000000020200000000000000000000000000000000000001010000000000000000000000000000010000000000000000000000000000000101000000000000000000000000000040000000000000
+0000000004020200010101800102020000000404000202020120808000000000000000000002020000000000000800000000000000020200000000000000000000000000000000000001010000000000000000000000000000010000000000000000000000000000000101000000000000000000000000000040000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1128,4 +1161,3 @@ __sfx__
 __music__
 00 01424344
 00 57424344
-
