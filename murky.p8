@@ -6,20 +6,20 @@ __lua__
 
 -- mit license
 
--- todo: boss fight - make it hard
 -- todo: arrow trap
 -- todo: pit hole
 -- todo: sticky webs
 -- todo: enemy archer
 
 -- global vars
-debug=true
+debug=false
 screenwidth = 127
 screenheight = 127
 speeds = { "vfast", "fast", "vfast", "fast", "vfast", "normal" }
 mapsize_y = 36
 mapsize_x = 108
 spd_left = 3
+time = 0
 tiles = {}
 dirs = {{0,-1}, {0,1}, {1,0}, {-1,0}}
 
@@ -29,9 +29,7 @@ deadtrees = {10, 12}
 floor = {40,41,42,43,56,57,58,59}
 wall = {90, 73, 73, 73, 73, 89, 89}
 caves = {124, 123, 109, 122, 107, 94, 108, 125, 78, 77, 93, 75, 91, 76, 92}
---   1
--- 2   4
---   8
+
 hit=0
 pick=1
 nope=2
@@ -117,8 +115,8 @@ end
 
 function _init()
 	cartdata(1)
-  -- title_init()
-  game_init()
+  title_init()
+  -- game_init()
 	-- win_init()
 end
 
@@ -138,16 +136,33 @@ function title_init()
 end
 
 function title_update()
+	time += 1
+	if time > 32 then
+		time = 0
+	end
 	if btnp(4) then
+		generating = true
+		time = 0
+	end
+
+	if generating and time >= 30 then
 		game_init()
 	end
 end
 
 function title_draw()
 	local titletxt = "murky"
+	local instrtxt = "journey east and"
+	local instr2txt = "defeat the beast"
 	local starttxt = "press z to start"
-	rectfill(0,0,screenwidth, screenheight, 3)
+	if generating then
+		starttxt = "generating..."
+	end
+	rectfill(0,0,screenwidth, screenheight, 0)
 	print(titletxt, hcenter(titletxt), screenheight/4, 10)
+	print(instrtxt, hcenter(instrtxt), vcenter(screenheight), 10)
+	print(instrtxt)
+	print(instr2txt)
 	print(starttxt, hcenter(starttxt), (screenheight/4)+(screenheight/2),7)
 end
 
@@ -161,7 +176,16 @@ function end_init()
 end
 
 function end_update()
+	time += 1
+	if time > 32 then
+		time = 0
+	end
 	if btnp(4) then
+		generating = true
+		time = 0
+	end
+
+	if generating and time >= 30 then
 		game_init()
 	end
 end
@@ -169,6 +193,10 @@ end
 function end_draw()
 	local titletxt = "you died :( to a"
 	local starttxt = "press z to restart"
+	if generating then
+		starttxt = "generating..."
+	end
+	tip = "tip: " .. tip
 	rectfill(0,0,screenwidth, screenheight, 1)
 	print(titletxt, hcenter(titletxt), screenheight/4, 10)
 	print(reason, hcenter(reason), screenheight/4 + 8, 10)
@@ -185,7 +213,16 @@ function win_init()
 end
 
 function win_update()
+	time += 1
+	if time > 32 then
+		time = 0
+	end
 	if btnp(4) then
+		generating = true
+		time = 0
+	end
+
+	if generating and time >= 30 then
 		game_init()
 	end
 end
@@ -193,6 +230,10 @@ end
 function win_draw()
 	local titletxt = "victory"
 	local starttxt = "press z to restart"
+	if generating then
+		starttxt = "generating..."
+	end
+
 	rectfill(0,0,screenwidth, screenheight, 0)
 	print(titletxt, hcenter(titletxt), 2, 10)
 	print("victory")
@@ -246,6 +287,7 @@ function game_init()
 	message = { ["text"]="",["ticks"]=0 }
 
   map_gen()
+	generating = false
 
   update=game_update
   draw=game_draw
@@ -558,8 +600,8 @@ function monster_move(monster)
   local dir = nil
   if distance == 1 then
 		if monster.atk == 0 then
-			local dx = monster.x - player.x
-	    local dy = monster.y - player.y
+			local dx = clamp(player.x - monster.x, -1, 1)
+			local dy = clamp(player.y - monster.y, -1, 1)
 			local mx = player.x + dx
 			local my = player.y + dy
 			if walkable(mx,my) then
@@ -777,16 +819,22 @@ function map_gen()
 	end
 
 	local spawn = (function(x,y)
-		if range(1, 10) == 1 then
+		if range(1, 20) == 1 then
 
 			if range(1,2) == 1 then
 				local monster = entity.create(x,y, 48, "bat")
 				monster.range = 10
 				add(monsters, monster)
-			else
+			elseif range(1,3) == 1 then
 				local monster = entity.create(x,y, 18, "shadow")
 				monster.range = 1
+				monster.atk = 0
 				add(monsters, monster)
+			else
+				local projectile = entity.create(x,y,6, "arrow")
+				projectile.spd = "vfast"
+				projectile.hit = true
+				add(projectiles, projectile)
 			end
 
 		end
